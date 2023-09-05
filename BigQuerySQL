@@ -1,4 +1,4 @@
---Initial goal of this project is to compare Covid numbers from around the world.  Perform some basic calculations and SQL code to explore and format the data for publication into a tableau dashboard.
+##Initial goal of this project is to compare Covid numbers from around the world.  Perform some basic calculations and SQL code to explore and format the data for publication into a tableau dashboard.
 
 -- Data was obtained from OurWorldInData.org and project outline provided by Alex the Analyst
 -- Chose to host the Data in Google Big Query and document the data in a jupyter notebook, utiimately publishing the report in Markdown format to Github and LinkedIn
