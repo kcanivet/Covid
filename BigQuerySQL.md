@@ -1,0 +1,206 @@
+--Initial goal of this project is to compare Covid numbers from around the world.  Perform some basic calculations and SQL code to explore and format the data for publication into a tableau dashboard.
+
+-- Data was obtained from OurWorldInData.org and project outline provided by Alex the Analyst
+-- Chose to host the Data in Google Big Query and document the data in a jupyter notebook, utiimately publishing the report in Markdown format to Github and LinkedIn
+-- hope to replicate workflow in R
+
+--copy covid death related info into a separate table
+
+
+INSERT INTO portfolio-396517.Covid19.OWID_Covid_deaths
+(iso_code, continent, location, date, population, total_cases, new_cases, total_deaths, new_deaths)
+SELECT iso_code, continent, location, date, population, total_cases, new_cases, total_deaths, new_deaths
+FROM portfolio-396517.Covid19.OWID_Data
+
+-- insert into isn't supported in GBQ, Use this query instead
+
+CREATE OR REPLACE TABLE portfolio-396517.Covid19.OWID_Covid_deaths
+AS
+SELECT iso_code, continent, location, date, population, total_cases, new_cases, total_deaths, new_deaths
+FROM portfolio-396517.Covid19.OWID_Data
+
+--Preview deaths table
+Select * from
+portfolio-396517.Covid19.OWID_Covid_deaths
+--Limit 10
+
+--New table for vaccinations data
+
+CREATE OR REPLACE TABLE portfolio-396517.Covid19.OWID_Covid_vax
+AS
+SELECT iso_code, continent, location, date, total_vaccinations, new_vaccinations, people_vaccinated, people_fully_vaccinated, total_boosters
+FROM portfolio-396517.Covid19.OWID_Data
+
+--Preview vax table
+Select * from
+portfolio-396517.Covid19.OWID_Covid_vax
+Limit 10
+
+--Start of Data exploration
+
+-- Cases vs Deaths
+-- Calculation to see percentage chance of death from Covid19.  Uncomment --DESC in ORDER BY to see the most recent data.  This flips the column to decending order (most recent first).
+--Where clause only shows where both items are not null to check calculation and narrow down to a specific country
+
+Select 
+location,
+date,
+total_cases,
+total_deaths,
+(total_deaths/total_cases)*100 as TotalPercentage,
+safe_divide(total_deaths, total_cases)*100 as SAFE_DIVIDE_Percentage --Alternative division method in case there are 0's in the denominator
+FROM portfolio-396517.Covid19.OWID_Covid_deaths
+where total_cases is not null AND total_deaths is not null AND location = 'Canada'
+Order by location,date --DESC
+LIMIT 100
+
+-- Comparing Population and cases to get relative number across countries.  Referencing reported cases which dramatically underestimates total
+
+Select 
+location,
+date,
+population,
+total_cases,
+(total_cases/population)*100 as TotalPercentagePop,
+safe_divide(total_cases, population)*100 as SAFE_DIVIDE_PercentagePop --Alternative division method in case there are 0's in the denominator
+FROM portfolio-396517.Covid19.OWID_Covid_deaths
+where total_cases is not null AND location = 'Canada'
+Order by location,date DESC
+LIMIT 100
+
+-- Direct comparison of countries to see what percentage of the population reported to have covid.  As the number of cases rose and governments shifted policies, reporting numbers likely to have been under reported.
+-- Comment DESC to see lowest 10, remove comment to see highest
+
+Select 
+location,
+MAX(safe_divide(total_cases, population)*100) as SAFE_DIVIDE_PercentagePop --Alternative division method in case there are 0's in the denominator
+FROM portfolio-396517.Covid19.OWID_Covid_deaths
+where total_cases is not null --eliminate countries not reporting
+group by location
+Order by SAFE_DIVIDE_PercentagePop --DESC
+LIMIT 25
+
+--Switching back to deaths to see which countries have the highest and lowest death totals, along with percentage deaths of the population.  Comment/uncomment the order by lines to switch between total death and death percentage rankings
+
+SELECT
+location,
+continent,
+MAX(population) as Max_population,
+MAX(total_deaths) as Max_Deaths,
+MAX(total_deaths)/MAX(population)*100 as DeathPercentage
+from portfolio-396517.Covid19.OWID_Covid_deaths
+WHERE total_deaths is not null AND continent is not null
+group by location, continent
+--order by Max_Deaths DESC
+order by DeathPercentage desc
+
+--Joining vax and death tables to perform calculations across the two datasets. Looking at world numbers
+
+SELECT 
+CovD.continent,
+CovD.location,
+MIN(CovD.date) as first_date,
+MAX(CovD.date) as last_date,
+MAX(CovD.population)as max_pop,
+SUM(CovVnD.new_vaccinations) as sum_new,
+MAX(total_vaccinations) as max_vac
+from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
+left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+  ON CovD.location = CovVnD.location AND
+  CovD.date = CovVnD.date
+  WHERE total_deaths is not null AND CovD.continent is not null  AND new_vaccinations is not null--AND CovD.location = 'Canada'
+  GROUP BY CovD.location, CovD.continent--, CovD.date, CovD.population, CovVnD.new_vaccinations
+  order by max_vac DESC
+  LIMIT 100
+
+--Making a rolling count to check new vax vs total vax
+
+SELECT 
+CovD.continent,
+CovD.location,
+CovD.date,
+CovD.population,
+CovVnD.total_vaccinations,
+CovVnD.new_vaccinations,
+CovVnD.people_vaccinated,
+CovVnD.people_fully_vaccinated,
+SUM(CovVnD.new_vaccinations) OVER (PARTITION BY CovD.location 
+  order by CovD.location, CovD.Date) as Rolling_Sum_Vax --Creates a rolling count
+from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
+left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+  ON CovD.location = CovVnD.location AND
+  CovD.date = CovVnD.date
+  WHERE  CovD.continent is not null AND CovD.location IN('Canada','United States','Brazil') AND new_vaccinations is not null AND total_deaths is not null
+  --GROUP BY CovD.location, CovD.continent--, CovD.date, CovD.population, CovVnD.new_vaccinations
+  order by 2,3 --DESC
+ -- LIMIT 100
+
+ --Make a CTE (common table expression) so we can use the rolling count in a calculation
+
+ With RollingVaxCTE 
+ AS(  SELECT 
+CovD.continent,
+CovD.location,
+CovD.date,
+CovD.population,
+SUM(CovVnD.new_vaccinations) OVER (PARTITION BY CovD.location 
+  order by CovD.location, CovD.Date) as Rolling_Sum_Vax --Creates a rolling count
+from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
+left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+  ON CovD.location = CovVnD.location AND
+  CovD.date = CovVnD.date
+  WHERE  CovD.continent is not null /*AND CovD.location IN('Canada','United States','Brazil')*/ AND new_vaccinations is not null AND total_deaths is not null
+  --GROUP BY CovD.location, CovD.continent--, CovD.date, CovD.population, CovVnD.new_vaccinations
+  order by 2,3 --DESC
+ -- LIMIT 100
+ )
+
+--Display the temp table and use the calculated column in another 
+ SELECT 
+ continent,
+ location,
+ date,
+ population,
+ Rolling_Sum_Vax,
+ (Rolling_Sum_Vax/population)*100 as percent_pop_vax 
+ From RollingVaxCTE
+ Where location = 'Canada'
+
+ -- Compare CTE to a TEMP Table.  Needs workspace ID (portfolio-395517...) to create in Big Query Console
+
+Create or replace Table portfolio-396517.Covid19.PercentPopVaxTable AS
+
+SELECT 
+CovD.continent,
+CovD.location,
+CovD.date,
+CovD.population,
+SUM(CovVnD.new_vaccinations) OVER (PARTITION BY CovD.location 
+  order by CovD.location, CovD.Date) as Rolling_Sum_Vax --Creates a rolling count
+from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
+left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+  ON CovD.location = CovVnD.location AND
+  CovD.date = CovVnD.date
+  WHERE  CovD.continent is not null /*AND CovD.location IN('Canada','United States','Brazil')*/ AND new_vaccinations is not null AND total_deaths is not null
+  --GROUP BY CovD.location, CovD.continent--, CovD.date, CovD.population, CovVnD.new_vaccinations
+  order by 2,3 --DESC
+ -- LIMIT 100
+ 
+-- Create a view to store results
+
+ CREATE VIEW portfolio-396517.Covid19.PercentPopVax AS
+ SELECT 
+CovD.continent,
+CovD.location,
+CovD.date,
+CovD.population,
+SUM(CovVnD.new_vaccinations) OVER (PARTITION BY CovD.location 
+  order by CovD.location, CovD.Date) as Rolling_Sum_Vax --Creates a rolling count
+from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
+left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+  ON CovD.location = CovVnD.location AND
+  CovD.date = CovVnD.date
+  WHERE  CovD.continent is not null /*AND CovD.location IN('Canada','United States','Brazil')*/ AND new_vaccinations is not null AND total_deaths is not null
+  --GROUP BY CovD.location, CovD.continent--, CovD.date, CovD.population, CovVnD.new_vaccinations
+  order by 2,3 --DESC
+ -- LIMIT 100
