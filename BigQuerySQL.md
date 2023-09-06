@@ -1,7 +1,8 @@
 #### Initial goal of this project is to compare Covid numbers from around the world.  Perform some basic calculations and SQL code to explore and format the data for publication into a tableau dashboard.
 
 ##### Data was obtained from OurWorldInData.org and project outline provided by Alex the Analyst
-##### Chose to host the Data in Google Big Query and document the data in a jupyter notebook, utiimately publishing the report in Markdown format to Github and LinkedIn
+##### I chose to host the Data in Google Big Query and document the data in a jupyter notebook, utiimately publishing the report in Markdown format to Github and LinkedIn
+###### Still working on linking the jupyter notebook link
 ##### hope to replicate workflow in R
 
 ##### copy covid death related info into a separate table
@@ -32,7 +33,7 @@ AS
 SELECT iso_code, continent, location, date, total_vaccinations, new_vaccinations, people_vaccinated, people_fully_vaccinated, total_boosters
 FROM portfolio-396517.Covid19.OWID_Data
 ```
---Preview vax table
+#### Preview vax table
 
 ```sql
 Select * from
@@ -40,11 +41,12 @@ portfolio-396517.Covid19.OWID_Covid_vax
 Limit 10
 ```
 
---Start of Data exploration
+### Start of Data exploration
 
--- Cases vs Deaths
--- Calculation to see percentage chance of death from Covid19.  Uncomment --DESC in ORDER BY to see the most recent data.  This flips the column to decending order (most recent first).
---Where clause only shows where both items are not null to check calculation and narrow down to a specific country
+#### Cases vs Deaths
+#### Calculation to see percentage chance of death from Covid19.  Uncomment --DESC in ORDER BY to see the most recent data.  This flips the column to decending order (most recent first).
+#### Where clause only shows where both items are not null to check calculation and narrow down to a specific country
+
 ```sql
 Select 
 location,
@@ -58,7 +60,8 @@ where total_cases is not null AND total_deaths is not null AND location = 'Canad
 Order by location,date --DESC
 LIMIT 100
 ```
--- Comparing Population and cases to get relative number across countries.  Referencing reported cases which dramatically underestimates total
+#### Comparing Population and cases to get relative number across countries.  Referencing reported cases which dramatically underestimates total
+
 ```sql
 Select 
 location,
@@ -72,8 +75,8 @@ where total_cases is not null AND location = 'Canada'
 Order by location,date DESC
 LIMIT 100
 ```
--- Direct comparison of countries to see what percentage of the population reported to have covid.  As the number of cases rose and governments shifted policies, reporting numbers likely to have been under reported.
--- Comment DESC to see lowest 10, remove comment to see highest
+#### Direct comparison of countries to see what percentage of the population reported to have covid.  As the number of cases rose and governments shifted policies, reporting numbers likely to have been under reported.
+#### Comment DESC to see lowest 10, remove comment to see highest
 ```sql
 Select 
 location,
@@ -84,7 +87,8 @@ group by location
 Order by SAFE_DIVIDE_PercentagePop --DESC
 LIMIT 25
 ```
---Switching back to deaths to see which countries have the highest and lowest death totals, along with percentage deaths of the population.  Comment/uncomment the order by lines to switch between total death and death percentage rankings
+#### Switching back to deaths to see which countries have the highest and lowest death totals, along with percentage deaths of the population.  Comment/uncomment the order by lines to switch between total death and death percentage rankings
+
 ```sql
 SELECT
 location,
@@ -98,7 +102,8 @@ group by location, continent
 --order by Max_Deaths DESC
 order by DeathPercentage desc
 ```
---Joining vax and death tables to perform calculations across the two datasets. Looking at world numbers
+#### Joining vax and death tables to perform calculations across the two datasets. Looking at world numbers
+
 ```sql
 SELECT 
 CovD.continent,
@@ -117,7 +122,8 @@ left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
   order by max_vac DESC
   LIMIT 100
 ```
---Making a rolling count to check new vax vs total vax
+#### Making a rolling count to check new vax vs total vax
+
 ```sql
 SELECT 
 CovD.continent,
@@ -139,7 +145,9 @@ left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
   order by 2,3 --DESC
  -- LIMIT 100
 ```
- --Make a CTE (common table expression) so we can use the rolling count in a calculation
+
+#### Make a CTE (common table expression) so we can use the rolling count in a calculation
+
 ```sql
  With RollingVaxCTE 
  AS(  SELECT 
@@ -159,7 +167,9 @@ left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
  -- LIMIT 100
  )
 ```
---Display the temp table and use the calculated column in another 
+
+#### Display the temp table and use the calculated column in another 
+
 ```sql
  SELECT 
  continent,
@@ -171,7 +181,10 @@ left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
  From RollingVaxCTE
  Where location = 'Canada'
 ```
- -- Compare CTE to a TEMP Table.  Needs workspace ID (portfolio-395517...) to create in Big Query Console
+
+#### Compare CTE to a TEMP Table.  Needs workspace ID (portfolio-395517...) to create in Big Query Console
+#### Temp Tables only last for 24hrs and are harder to deal with the GBQ.  Created an actual table instead.
+
 ```sql
 Create or replace Table portfolio-396517.Covid19.PercentPopVaxTable AS
 
@@ -191,7 +204,9 @@ left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
   order by 2,3 --DESC
  -- LIMIT 100
  ```
+
 #### Create a view to store results
+
 ```sql
  CREATE VIEW portfolio-396517.Covid19.PercentPopVax AS
  SELECT 
