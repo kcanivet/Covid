@@ -1,0 +1,222 @@
+---
+title: "Covid Data ExploRation"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+date: "2023-09-07"
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+## Install Packages and set up environment
+
+#### When knitting a markdown document install packages in console and libraries in the markdown
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+install.packages("tidyverse") 
+
+install.packages("ggplot2") 
+
+install.packages("googledrive") 
+
+drive_auth([email="youremail@gmail.com"])
+
+```{hide}
+drive_auth([email="k.canivet.usa@gmail.com]")
+```
+To make executable code in a "Chunk" add "\`\`\`{r}"
+```{r librarys, message=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(googledrive)
+```
+
+## Project Goals
+
+#### The goal of this project is to replicate a workflow I conducted in SQL based off a tutorial by "Alex the Analyst"
+
+[https://youtu.be/qfyynHBFOsM?si=Nzr2eiFWr_3gs7w6)](https://youtu.be/qfyynHBFOsM?si=Nzr2eiFWr_3gs7w6)){.uri}
+
+### Getting the data
+
+#### I had the data stored in a google drive folder,so I am accessing it from there
+
+Authorize R Studio to communicate with Google Drive
+
+Navigate to the Google Drive folder that contains the data and list the
+files
+
+```{r file_list, message=FALSE, warning=FALSE}
+drive_ls("~/Portfolio/Covid19")
+```
+
+Get source datafile from Google Drive and open in R Studio
+
+```{r Pull_Data_File, eval=FALSE, include=FALSE}
+drive_download("owid-covid-data.csv")
+
+```
+
+Read the csv into a dataframe
+
+```{r loadcsv}
+covid_data_full <- read_csv("owid-covid-data.csv")
+```
+
+#### Inspect the data frame
+
+```{r head}
+head(covid_data_full)
+```
+
+```{r columnlist}
+colnames(covid_data_full)
+```
+
+#### Create 2 separate dataframes, one for cases and deaths, one for
+
+vaccination data
+
+```{r filesplit}
+OWID_Deaths <- subset(covid_data_full, select = c(iso_code,continent, location, date,population,total_cases,new_cases,total_deaths,new_deaths))
+
+OWID_Vax <- subset(covid_data_full, select = c(iso_code, continent,location,date,total_vaccinations,new_vaccinations,people_vaccinated,people_fully_vaccinated, total_boosters))
+
+```
+
+Verify columns in new dataframes
+
+```{r dataframes}
+colnames(OWID_Deaths)
+```
+
+Filter the OWID_Deaths dataframe to only show a select list of countries
+
+```{r select_countries}
+OWID_Deaths_filter_location <- OWID_Deaths %>% 
+  filter(location %in% c("Canada", "United States", "Italy","Brazil"))
+
+show(OWID_Deaths_filter_location)
+```
+
+An advantage of using R is adding charts for a quick look. Adding a line
+chart to compare selected countries with total deaths over time
+
+```{r country_graph, message=FALSE}
+ggplot(data = OWID_Deaths_filter_location)+
+  geom_line(mapping=aes(x=date,y=total_deaths,color=location))
+```
+
+```{r head_vax}
+head(OWID_Vax)
+```
+
+Add a new calculated column to the OWID_Deaths dataframe to get a
+percentage. Then check the calculation by filtering when the United
+States had values greater than 1% of the population
+
+```{r OWID_Deaths}
+OWID_Deaths <- OWID_Deaths %>%
+  mutate(percent_pop=(total_cases/population)*100)
+
+print(OWID_Deaths) %>% 
+  filter(!is.na(total_cases), location=="United States", percent_pop>1) %>% 
+  slice(1:25)
+```
+
+show the maximum percentage from the OWID_Deaths dataframe for each
+country, ranked from highest to lowest
+
+null results can't mix with numerical values for summarize. The 2nd filter step is necessary before summarize
+```{r Deaths_rank}
+OWID_Deaths_Max <- OWID_Deaths %>% 
+  select(continent,location,total_deaths) %>% 
+  filter(!is.na(continent)) %>% 
+  group_by(location,continent) %>% 
+  filter(!is.na(total_deaths)) %>% 
+  summarize(max_deaths=max(total_deaths)) %>% 
+  arrange(desc(max_deaths))  
+  
+print(OWID_Deaths_Max)
+```
+
+Rank countries by percent of population with Covid19
+
+```{r perc_rank}
+OWID_Deaths_MaxP <- OWID_Deaths %>% 
+  select(continent,location,percent_pop) %>% 
+  filter(!is.na(percent_pop)) %>% 
+  group_by(location,continent) %>% 
+  summarize(max_prec=max(percent_pop)) %>% 
+  arrange(desc(max_prec)) 
+ 
+print(OWID_Deaths_MaxP)
+```
+
+Join the two OWID dataframes
+
+```{r join}
+joined_OWID <- left_join(OWID_Deaths,OWID_Vax, by = c("location","date" ))
+
+colnames(joined_OWID)
+```
+
+```{r}
+head(joined_OWID)
+```
+
+create a rolling count
+
+```{r rolling_count}
+joined_OWID_RC <- joined_OWID %>%
+  arrange(location, date) %>% 
+  filter(!is.na(continent.x)) %>% 
+  group_by(location,continent.x) %>% 
+  filter(!is.na(new_vaccinations)) %>% 
+  mutate(Rolling_Sum_Vax = cumsum(new_vaccinations)) %>% 
+  filter(location %in% c("Canada", "United States","Brazil"))
+
+print(joined_OWID_RC[, c("continent.x","location","date", "Rolling_Sum_Vax")])
+```
+
+Take the previous dataframe and rank the countries by the total of new
+vaccinations
+
+```{r total_summary}
+joined_OWID_RC_totals <- joined_OWID %>%
+  arrange(location, date) %>% 
+  filter(!is.na(continent.x)) %>% 
+  group_by(location,continent.x) %>% 
+  filter(!is.na(new_vaccinations)) %>% 
+  mutate(Rolling_Sum_Vax = cumsum(new_vaccinations)) %>% 
+  #filter(location %in% c("Canada", "United States","Brazil"))
+  summarize(rolling_total=max(Rolling_Sum_Vax)) %>% 
+  arrange(desc(rolling_total)) 
+  
+print(joined_OWID_RC_totals)
+```
+
+Trim the dataframe to only show the top 10
+
+```{r top10}
+joined_OWID_RC_top10 <- joined_OWID_RC_totals %>%
+    arrange(desc(rolling_total)) %>% 
+     head(10)
+
+print(joined_OWID_RC_top10)
+```
+
+### Show some charts of the data
+
+```{r column_chart}
+ggplot(data=joined_OWID_RC_top10) +
+         geom_col(mapping=aes(x=reorder(location,rolling_total),y=rolling_total,fill=location,width = 0.9))+
+          coord_flip()+
+          labs(title = "Rolling Total Vaccinations",subtitle="Top 10",y="Total Vaccinations (Billions)",x="Country")+
+          scale_y_continuous(labels = scales::comma_format(scale = 1e-9))
+```
