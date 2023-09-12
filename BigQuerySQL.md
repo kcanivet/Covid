@@ -8,36 +8,36 @@
 ##### copy covid death related info into a separate table
 
 ```sql
-INSERT INTO portfolio-396517.Covid19.OWID_Covid_deaths
+INSERT INTO ~.Covid19.OWID_Covid_deaths
 (iso_code, continent, location, date, population, total_cases, new_cases, total_deaths, new_deaths)
 SELECT iso_code, continent, location, date, population, total_cases, new_cases, total_deaths, new_deaths
-FROM portfolio-396517.Covid19.OWID_Data
+FROM ~.Covid19.OWID_Data
 ```
 #### insert into isn't supported in GBQ, Use this query instead
 ```sql
-CREATE OR REPLACE TABLE portfolio-396517.Covid19.OWID_Covid_deaths
+CREATE OR REPLACE TABLE ~.Covid19.OWID_Covid_deaths
 AS
 SELECT iso_code, continent, location, date, population, total_cases, new_cases, total_deaths, new_deaths
-FROM portfolio-396517.Covid19.OWID_Data
+FROM ~.Covid19.OWID_Data
 ```
 #### Preview deaths table
 ```sql
 Select * from
-portfolio-396517.Covid19.OWID_Covid_deaths
+~.Covid19.OWID_Covid_deaths
 --Limit 10
 ```
 #### New table for vaccinations data
 ```sql
-CREATE OR REPLACE TABLE portfolio-396517.Covid19.OWID_Covid_vax
+CREATE OR REPLACE TABLE ~.Covid19.OWID_Covid_vax
 AS
 SELECT iso_code, continent, location, date, total_vaccinations, new_vaccinations, people_vaccinated, people_fully_vaccinated, total_boosters
-FROM portfolio-396517.Covid19.OWID_Data
+FROM ~.Covid19.OWID_Data
 ```
 #### Preview vax table
 
 ```sql
 Select * from
-portfolio-396517.Covid19.OWID_Covid_vax
+~.Covid19.OWID_Covid_vax
 Limit 10
 ```
 
@@ -55,7 +55,7 @@ total_cases,
 total_deaths,
 (total_deaths/total_cases)*100 as TotalPercentage,
 safe_divide(total_deaths, total_cases)*100 as SAFE_DIVIDE_Percentage --Alternative division method in case there are 0's in the denominator
-FROM portfolio-396517.Covid19.OWID_Covid_deaths
+FROM ~.Covid19.OWID_Covid_deaths
 where total_cases is not null AND total_deaths is not null AND location = 'Canada'
 Order by location,date --DESC
 LIMIT 100
@@ -70,7 +70,7 @@ population,
 total_cases,
 (total_cases/population)*100 as TotalPercentagePop,
 safe_divide(total_cases, population)*100 as SAFE_DIVIDE_PercentagePop --Alternative division method in case there are 0's in the denominator
-FROM portfolio-396517.Covid19.OWID_Covid_deaths
+FROM ~.Covid19.OWID_Covid_deaths
 where total_cases is not null AND location = 'Canada'
 Order by location,date DESC
 LIMIT 100
@@ -81,7 +81,7 @@ LIMIT 100
 Select 
 location,
 MAX(safe_divide(total_cases, population)*100) as SAFE_DIVIDE_PercentagePop --Alternative division method in case there are 0's in the denominator
-FROM portfolio-396517.Covid19.OWID_Covid_deaths
+FROM ~.Covid19.OWID_Covid_deaths
 where total_cases is not null --eliminate countries not reporting
 group by location
 Order by SAFE_DIVIDE_PercentagePop --DESC
@@ -96,7 +96,7 @@ continent,
 MAX(population) as Max_population,
 MAX(total_deaths) as Max_Deaths,
 MAX(total_deaths)/MAX(population)*100 as DeathPercentage
-from portfolio-396517.Covid19.OWID_Covid_deaths
+from ~.Covid19.OWID_Covid_deaths
 WHERE total_deaths is not null AND continent is not null
 group by location, continent
 --order by Max_Deaths DESC
@@ -113,8 +113,8 @@ MAX(CovD.date) as last_date,
 MAX(CovD.population)as max_pop,
 SUM(CovVnD.new_vaccinations) as sum_new,
 MAX(total_vaccinations) as max_vac
-from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
-left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+from ~.Covid19.OWID_Covid_deaths AS CovD
+left join ~.Covid19.OWID_Covid_vax AS CovVnD
   ON CovD.location = CovVnD.location AND
   CovD.date = CovVnD.date
   WHERE total_deaths is not null AND CovD.continent is not null  AND new_vaccinations is not null--AND CovD.location = 'Canada'
@@ -136,8 +136,8 @@ CovVnD.people_vaccinated,
 CovVnD.people_fully_vaccinated,
 SUM(CovVnD.new_vaccinations) OVER (PARTITION BY CovD.location 
   order by CovD.location, CovD.Date) as Rolling_Sum_Vax --Creates a rolling count
-from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
-left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+from ~.Covid19.OWID_Covid_deaths AS CovD
+left join ~.Covid19.OWID_Covid_vax AS CovVnD
   ON CovD.location = CovVnD.location AND
   CovD.date = CovVnD.date
   WHERE  CovD.continent is not null AND CovD.location IN('Canada','United States','Brazil') AND new_vaccinations is not null AND total_deaths is not null
@@ -157,8 +157,8 @@ CovD.date,
 CovD.population,
 SUM(CovVnD.new_vaccinations) OVER (PARTITION BY CovD.location 
   order by CovD.location, CovD.Date) as Rolling_Sum_Vax --Creates a rolling count
-from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
-left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+from ~.Covid19.OWID_Covid_deaths AS CovD
+left join ~.Covid19.OWID_Covid_vax AS CovVnD
   ON CovD.location = CovVnD.location AND
   CovD.date = CovVnD.date
   WHERE  CovD.continent is not null /*AND CovD.location IN('Canada','United States','Brazil')*/ AND new_vaccinations is not null AND total_deaths is not null
@@ -186,7 +186,7 @@ left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
 #### Temp Tables only last for 24hrs and are harder to deal with the GBQ.  Created an actual table instead.
 
 ```sql
-Create or replace Table portfolio-396517.Covid19.PercentPopVaxTable AS
+Create or replace Table ~.Covid19.PercentPopVaxTable AS
 
 SELECT 
 CovD.continent,
@@ -195,8 +195,8 @@ CovD.date,
 CovD.population,
 SUM(CovVnD.new_vaccinations) OVER (PARTITION BY CovD.location 
   order by CovD.location, CovD.Date) as Rolling_Sum_Vax --Creates a rolling count
-from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
-left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+from ~.Covid19.OWID_Covid_deaths AS CovD
+left join ~.Covid19.OWID_Covid_vax AS CovVnD
   ON CovD.location = CovVnD.location AND
   CovD.date = CovVnD.date
   WHERE  CovD.continent is not null /*AND CovD.location IN('Canada','United States','Brazil')*/ AND new_vaccinations is not null AND total_deaths is not null
@@ -208,7 +208,7 @@ left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
 #### Create a view to store results
 
 ```sql
- CREATE VIEW portfolio-396517.Covid19.PercentPopVax AS
+ CREATE VIEW ~.Covid19.PercentPopVax AS
  SELECT 
 CovD.continent,
 CovD.location,
@@ -216,8 +216,8 @@ CovD.date,
 CovD.population,
 SUM(CovVnD.new_vaccinations) OVER (PARTITION BY CovD.location 
   order by CovD.location, CovD.Date) as Rolling_Sum_Vax --Creates a rolling count
-from portfolio-396517.Covid19.OWID_Covid_deaths AS CovD
-left join portfolio-396517.Covid19.OWID_Covid_vax AS CovVnD
+from ~.Covid19.OWID_Covid_deaths AS CovD
+left join ~.Covid19.OWID_Covid_vax AS CovVnD
   ON CovD.location = CovVnD.location AND
   CovD.date = CovVnD.date
   WHERE  CovD.continent is not null /*AND CovD.location IN('Canada','United States','Brazil')*/ AND new_vaccinations is not null AND total_deaths is not null
